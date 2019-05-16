@@ -1,0 +1,186 @@
+---
+title: "Diabetes dataset exercise"
+output: html_notebook
+---
+# Goal of this exercise
+The main purpose of this exercise was to get familiar with R syntax and plotting functions. The dataset used for this exercise was found as part of the study *An Optimized Random Forest Classifier for Diabetes Mellitus* study by Komal Kumar Napa et al. The study's article can be found under [this link](https://link.springer.com/chapter/10.1007/978-981-13-1498-8_67).
+
+To be able to use the data correctly, it is crucial to understand what population we are dealing with. To get a deeper understanding of the dataset, we will look at: uniqueness of patients, distribution of ethnicity, distribution of gender, type of admissions, time spent in hospital, relationship between insulin and weight. Lastly, we will perform some functions to clean the data set (e.g. remove entries with too much data missing).
+
+# Uniqueness
+To find out if patients are unique of if they have multiple encounter ids, we created 3 subsets. 
+
+The first subset is filled with all patients that do not have a duplicated patient number.
+The second subset if filled with all patients that are repeated throughout the subsets and keeps all those repeated instances in its subset.
+The thirs subset is filled with only one instance of the repeated patients. More precisely, the instance that is kept is the first encounter.
+
+```{r echo=FALSE}
+#Patients
+unique_patients <- data[!(duplicated(data$patient_nbr)),]
+all_repeated_patients <- data[duplicated(data$patient_nbr)|duplicated(data$patient_nbr, fromLast=TRUE),]
+repeated_patients <- all_repeated_patients[unique(all_repeated_patients$patient_nbr),]
+
+print(paste("The number of unique patients is : ", nrow(unique_patients)))
+print(paste("The number of all repeated patient instances is : ", nrow(all_repeated_patients)))
+print(paste("The number of repeated patient is : ", nrow(repeated_patients)))
+
+```
+
+
+```{r echo=FALSE}
+uniqueness_plot <- ggplot(unique_patients, aes(x = gender, fill = race)) + 
+  geom_bar(stat = "count", size = 1) + ylim(0, 40000) +
+  ggtitle("Proportion of male/female of unique patients")
+
+repeated_plot <- ggplot(all_repeated_patients, aes(x = gender, fill = race)) + 
+  geom_bar(stat = "count", size = 1) + ylim(0, 40000) +
+  ggtitle("Proportion of male/female of repeated patients")
+
+grid.arrange(uniqueness_plot, repeated_plot)
+
+```
+
+The graph above shows the proportions of each ethnicity by gender for unique and repeated patients.
+
+We can observe that in both unique and repeated patients, there are generally more females than males. In all cases, the biggest ethnicity group is *Caucasian*, followed by *African Amercian*. Interestingly, there are more patients that are unique (i.e. can in once) than repeated patients (i.e. had multiple encounters).
+
+# Gender
+All generated plots with discrete data were created using a similar srtucture:
+1- Creating a vector with categories
+2- Creating a vector with values of interest
+3- Creating a vector with corresponding percentages
+4- Creating a data frame
+5- Create a plot for this data frame
+
+```{r echo=FALSE}
+#set up factors (aka all that are categories-- not numerical, continuous data)
+gender.vector <- getSubsetName(data$gender)
+gender.value <- getSubsetValue(data, data$gender, gender.vector)
+gender.pct <- getPercentage(gender.value)
+
+df_gender <- data.frame(
+  group = gender.vector,
+  value = gender.value,
+  pct = gender.pct
+)
+head(df_gender)
+gender.x <- df_gender$value
+gender.labels <- paste(df_gender$pct, "%")
+gender_chart <- pie(gender.x, gender.labels, main = "Gender pie chart", col = rainbow(length(gender.x)))
+legend("topright", gender_chart, gender.vector, fill = rainbow(length(gender.x)))
+```
+The graph above, shows that more than half of the data in this dataset is from female patients, and a little below half of the information is from male patients. The number of Unknown/Invalid gender infromation is negligible.
+
+# Age
+
+The graph below shows the distribution of age ranges throught the data set. It is important to keep in mind that some patients in this set are repeated and thus some proportions of some age ranges might be overestimated. For this reason, let's compare the percentages of unique vs repeated patients. As you may observe in the second plot grid, the percentages of repeated and unique patients are similar. Thus looking at the whole data set is reasonable to get an estimate of the age distribution.
+
+```{r echo=FALSE}
+#Function to get subset values for age
+levels.age <- getSubsetName(data$age)
+value <- getSubsetValue(data, data$age, levels.age)
+
+#create dataframe
+df_age <- data.frame(
+  group = levels.age,
+  value = value,
+  pct = getPercentage(value)
+)
+
+
+#pie chart of distribution of age groups in data set of ALL PATIENTS
+
+df_age$pct[df_age$pct < 1] = " "
+
+x_age <- df_age$value
+age_labels <- paste(df_age$pct, "%")
+age_labels[age_labels == "  %"] = " "
+
+age_chart <- pie(x_age, label = age_labels, main = "Pie chart of the age of all patients", col = rainbow(length(x_age)))
+legend("topright", age_chart,levels.age, fill = rainbow(length(x_age)))
+
+#pie chart of age for unique patients
+unique_group <- getSubsetName(unique_patients$age)
+unique_value <- getSubsetValue(unique_patients, unique_patients$age, unique_group)
+unique_pct <- getPercentage(unique_value)
+
+df_age_unique <- data.frame(
+  group = unique_group,
+  value = unique_value,
+  pct = unique_pct
+)
+
+df_age_unique$pct[df_age_unique$pct < 1] = " "
+x_unique_age <- df_age_unique$value
+unique_age_labels <- paste(df_age_unique$pct, "%")
+unique_age_labels[unique_age_labels == "  %"] = " "
+
+#pie chart of age for repeated patients
+repeated_group <- getSubsetName(all_repeated_patients$age)
+repeated_value <- getSubsetValue(all_repeated_patients, all_repeated_patients$age, repeated_group)
+repeated_pct <- getPercentage(repeated_value)
+
+df_age_repeated <- data.frame(
+  group = repeated_group,
+  value = repeated_value,
+  pct = repeated_pct
+)
+
+df_age_repeated$pct[df_age_repeated$pct < 1] = " "
+x_repeated_age <- df_age_repeated$value
+repeated_age_labels <- paste(df_age_repeated$pct, "%")
+repeated_age_labels[repeated_age_labels == "  %"] = " "
+
+
+par(mfrow=c(1,2) )
+age_chart_unique <- pie(x_unique_age, label = unique_age_labels, main = "Pie chart of the age of unique patients", col = rainbow(length(x_unique_age)))
+age_chart_repeated <- pie(x_repeated_age, label = repeated_age_labels, main = "Pie chart of the age of repeated patients", col = rainbow(length(x_repeated_age)))
+legend("bottom", age_chart,levels.age, fill = rainbow(length(x_repeated_age)), cex=0.5)
+```
+
+
+# Admission types
+
+The graph below shows the frequency of each type of admission ids. The most frequent admission type ID is 1 which represents *emergency*.
+```{r echo=FALSE}
+#set up factors (aka all that are categories-- not numerical, continuous data)
+admission_type_id <- as.factor(data$admission_type_id)
+
+#set up numerical data columns
+admission_type_id_cont <- data$admission_type_id
+
+#Admissions
+admission_plot <- ggplot(data = data, aes(admission_type_id))
+admission_plot +
+  xlab("Admission Type ID") +
+  ylab("Counts") +
+  ggtitle("Distribution of admission types")  +
+  geom_histogram(breaks=seq(0, 8, by=1),
+                 col = "grey",
+                 aes(fill=..count..)) +
+  scale_fill_gradient("Counts", low="blue", high="green")
+```
+# Kind of patients
+
+
+# Time spent in hospital
+
+
+# Relationship between weight and insulin
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

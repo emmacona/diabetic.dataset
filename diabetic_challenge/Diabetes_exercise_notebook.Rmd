@@ -1,0 +1,341 @@
+---
+title: "Diabetes dataset exercise"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+# Goal of this exercise
+The main purpose of this exercise was to get familiar with R syntax and plotting functions. The dataset used for this exercise was found as part of the study *An Optimized Random Forest Classifier for Diabetes Mellitus* study by Komal Kumar Napa et al. The study's article can be found under [this link](https://link.springer.com/chapter/10.1007/978-981-13-1498-8_67).
+
+To be able to use the data correctly, it is crucial to understand what population we are dealing with. To get a deeper understanding of the dataset, we will look at: uniqueness of patients, distribution of ethnicity, distribution of gender, type of admissions, time spent in hospital, relationship between insulin and weight. Lastly, we will perform some functions to clean the data set (e.g. remove entries with too much data missing).
+
+# Cleaning the dataset
+```{r echo=FALSE}
+#Replace all missing values with NA
+data[data =='?'] = NA
+data[data =='Unknown/Invalid'] = NA
+
+#Add column with NA count
+data$na_count <- apply(data, 1, function(x) sum(is.na(x)))
+
+clean.data <- all_under_30pct(data)
+
+if(nrow(clean.data) == nrow(data)){
+  print("There are no entries with over 30% of missing information.")
+}
+
+paste("The maximum number of missing information is : ", max(data$na_count), ", which represents", round(100*max(data$na_count)/ncol(data), 2), "% missing information.")
+
+no_dead <- clean.dead(clean.data)
+
+paste("The number of dead patients is ", nrow(clean.data) - nrow(no_dead))
+
+```
+
+
+
+# Uniqueness
+To find out if patients are unique of if they have multiple encounter ids, we created 3 subsets. 
+
+The first subset is filled with all patients that do not have a duplicated patient number.
+The second subset if filled with all patients that are repeated throughout the subsets and keeps all those repeated instances in its subset.
+The thirs subset is filled with only one instance of the repeated patients. More precisely, the instance that is kept is the first encounter.
+
+```{r echo=FALSE}
+#Patients
+unique_patients <- data[!(duplicated(data$patient_nbr)),]
+all_repeated_patients <- data[duplicated(data$patient_nbr)|duplicated(data$patient_nbr, fromLast=TRUE),]
+repeated_patients <- all_repeated_patients[unique(all_repeated_patients$patient_nbr),]
+
+print(paste("The number of unique patients is : ", nrow(unique_patients)))
+print(paste("The number of all repeated patient instances is : ", nrow(all_repeated_patients)))
+print(paste("The number of repeated patient is : ", nrow(repeated_patients)))
+
+```
+
+
+```{r echo=FALSE}
+uniqueness_plot <- ggplot(unique_patients, aes(x = gender, fill = race)) + 
+  geom_bar(stat = "count", size = 1) + ylim(0, 40000) +
+  ggtitle("Proportion of male/female of unique patients")
+
+repeated_plot <- ggplot(all_repeated_patients, aes(x = gender, fill = race)) + 
+  geom_bar(stat = "count", size = 1) + ylim(0, 40000) +
+  ggtitle("Proportion of male/female of repeated patients")
+
+grid.arrange(uniqueness_plot, repeated_plot)
+
+```
+
+The graph above shows the proportions of each ethnicity by gender for unique and repeated patients.
+
+We can observe that in both unique and repeated patients, there are generally more females than males. In all cases, the biggest ethnicity group is *Caucasian*, followed by *African Amercian*. Interestingly, there are more patients that are unique (i.e. can in once) than repeated patients (i.e. had multiple encounters).
+
+# Gender
+All generated plots with discrete data were created using a similar srtucture:
+1- Creating a vector with categories
+2- Creating a vector with values of interest
+3- Creating a vector with corresponding percentages
+4- Creating a data frame
+5- Create a plot for this data frame
+
+```{r echo=FALSE}
+#set up factors (aka all that are categories-- not numerical, continuous data)
+gender.vector <- getSubsetName(data$gender)
+gender.value <- getSubsetValue(data, data$gender, gender.vector)
+gender.pct <- getPercentage(gender.value)
+
+df_gender <- data.frame(
+  group = gender.vector,
+  value = gender.value,
+  pct = gender.pct
+)
+head(df_gender)
+gender.x <- df_gender$value
+gender.labels <- paste(df_gender$pct, "%")
+gender_chart <- pie(gender.x, gender.labels, main = "Gender pie chart", col = rainbow(length(gender.x)))
+legend("topright", gender_chart, gender.vector, fill = rainbow(length(gender.x)))
+```
+The graph above, shows that more than half of the data in this dataset is from female patients, and a little below half of the information is from male patients. The number of Unknown/Invalid gender infromation is negligible.
+
+# Age
+
+The graph below shows the distribution of age ranges throught the data set. It is important to keep in mind that some patients in this set are repeated and thus some proportions of some age ranges might be overestimated. For this reason, let's compare the percentages of unique vs repeated patients. As you may observe in the second plot grid, the percentages of repeated and unique patients are similar. Thus looking at the whole data set is reasonable to get an estimate of the age distribution.
+
+```{r echo=FALSE, fig.width = 10}
+#Function to get subset values for age
+levels.age <- getSubsetName(data$age)
+value <- getSubsetValue(data, data$age, levels.age)
+
+#create dataframe
+df_age <- data.frame(
+  group = levels.age,
+  value = value,
+  pct = getPercentage(value)
+)
+
+
+#pie chart of distribution of age groups in data set of ALL PATIENTS
+
+df_age$pct[df_age$pct < 1] = " "
+
+x_age <- df_age$value
+age_labels <- paste(df_age$pct, "%")
+age_labels[age_labels == "  %"] = " "
+
+age_chart <- pie(x_age, label = age_labels, main = "Pie chart of the age of all patients", col = rainbow(length(x_age)))
+legend("topright", age_chart,levels.age, fill = rainbow(length(x_age)))
+
+#pie chart of age for unique patients
+unique_group <- getSubsetName(unique_patients$age)
+unique_value <- getSubsetValue(unique_patients, unique_patients$age, unique_group)
+unique_pct <- getPercentage(unique_value)
+
+df_age_unique <- data.frame(
+  group = unique_group,
+  value = unique_value,
+  pct = unique_pct
+)
+
+df_age_unique$pct[df_age_unique$pct < 1] = " "
+x_unique_age <- df_age_unique$value
+unique_age_labels <- paste(df_age_unique$pct, "%")
+unique_age_labels[unique_age_labels == "  %"] = " "
+
+#pie chart of age for repeated patients
+repeated_group <- getSubsetName(all_repeated_patients$age)
+repeated_value <- getSubsetValue(all_repeated_patients, all_repeated_patients$age, repeated_group)
+repeated_pct <- getPercentage(repeated_value)
+
+df_age_repeated <- data.frame(
+  group = repeated_group,
+  value = repeated_value,
+  pct = repeated_pct
+)
+
+df_age_repeated$pct[df_age_repeated$pct < 1] = " "
+x_repeated_age <- df_age_repeated$value
+repeated_age_labels <- paste(df_age_repeated$pct, "%")
+repeated_age_labels[repeated_age_labels == "  %"] = " "
+
+
+par(mfrow=c(1,2) )
+age_chart_unique <- pie(x_unique_age, label = unique_age_labels, main = "Pie chart of the age of unique patients", col = rainbow(length(x_unique_age)))
+age_chart_repeated <- pie(x_repeated_age, label = repeated_age_labels, main = "Pie chart of the age of repeated patients", col = rainbow(length(x_repeated_age)))
+legend("bottom", age_chart,levels.age, fill = rainbow(length(x_repeated_age)), cex = 0.8, ncol = 2)
+```
+
+
+# Admission types
+
+The graph below shows the frequency of each type of admission ids. The most frequent admission type ID is 1 which represents *emergency*.
+```{r echo=FALSE}
+#set up factors (aka all that are categories-- not numerical, continuous data)
+admission_type_id <- as.factor(data$admission_type_id)
+
+#set up numerical data columns
+admission_type_id_cont <- data$admission_type_id
+
+#Admissions
+admission_plot <- ggplot(data = data, aes(admission_type_id))
+admission_plot +
+  xlab("Admission Type ID") +
+  ylab("Counts") +
+  ggtitle("Distribution of admission types")  +
+  geom_histogram(breaks=seq(0, 8, by=1),
+                 col = "grey",
+                 aes(fill=..count..)) +
+  scale_fill_gradient("Counts", low="blue", high="green")
+```
+
+ID  | Admission type
+--- | -------------
+1	| Emergency
+2	| Urgent
+3	| Elective
+4	| Newborn
+5	| Not Available
+6	| NULL
+7	| Trauma Center
+8	| Not Mapped
+
+
+# Number of visits
+The plot below shows the frequency of visits in the preceding year for in-patients, out-patients and emergency patients respectively. We can observe that in all three categories, most patients have not come to the hospital in the preceding year. However, a closer look at the data reveals that the number of patients that are coming in for the first time this year is larger in out- and emergency-patients. This means that in-patients have a larger tendency to come more than once per year compared to out- and emergency-patients.
+
+```{r echo=FALSE, fig.width = 10}
+#set up factors (aka all that are categories-- not numerical, continuous data)
+race <- as.factor(data$race)
+gender <- as.factor(data$gender)
+age <- as.factor(data$age)
+weight <- as.factor(data$weight)
+admission_type_id <- as.factor(data$admission_type_id)
+discharge_disposition_id <- as.factor(data$discharge_disposition_id)
+inPatientsFact <- as.factor(data$number_inpatient)
+outPatientsFact <- as.factor(data$number_outpatient)
+emergencyPatientsFact <- as.factor(data$number_emergency)
+
+
+#set up numerical data columns
+encounter_id <- data$encounter_id
+patient_nb <- data$patient_nbr
+admission_type_id_cont <- data$admission_type_id
+inPatients <- data$number_inpatient
+outPatients <- data$number_outpatient
+emergencyPatients <- data$number_emergency
+timeInHospital <- data$time_in_hospital
+numProcedures <- data$num_procedures
+
+
+inPatients_plot <- ggplot(data, aes(x = inPatientsFact, fill = gender)) + 
+  geom_bar(stat = "count", size = 1) +
+  ggtitle("Frequency of number of visits in the preceding year for in-patients") + ylim(0,100000) + scale_x_discrete(limits = c("0", "1", "2", "3")) +
+  xlab("Number of visits in the precending year") + ylab("Count")
+outPatients_plot <- ggplot(data, aes(x = outPatientsFact, fill = gender)) + 
+  geom_bar(stat = "count", size = 1) +
+  ggtitle("Frequency of number of visits in the preceding year for out-patients") + ylim(0,100000) + scale_x_discrete(limits = c("0", "1", "2", "3"))+
+  xlab("Number of visits in the precending year")+ ylab("Count")
+erPatients_plot <- ggplot(data, aes(x = emergencyPatientsFact, fill = gender)) + 
+  geom_bar(stat = "count", size = 1) +
+  ggtitle("Frequency of number of visits in the preceding year for ER-patients") + ylim(0,100000) + scale_x_discrete(limits = c("0", "1", "2", "3"))+
+  xlab("Number of visits in the precending year")+ ylab("Count")
+
+grid.arrange(inPatients_plot, outPatients_plot, erPatients_plot)
+```
+*Need to add percentages to this graph !!*
+
+# Time spent in hospital
+
+The graph below shows the distributions of the number of days sepnt in hospital for all patients. We can observe that the most common number of days spent in hospital is 3. However, the median is 4 days.
+
+```{r echo=FALSE, fig.width = 10}
+# Time spent in hospital
+
+timeInHospital <- data$time_in_hospital
+
+#Time in hospital
+time_plot <- ggplot(data = data, aes(timeInHospital))
+time_plot +
+  xlab("Number of days between admission and discharge") +
+  ylab("Frequency") +
+  ggtitle("Distribution of time in hospital")  +
+  scale_x_continuous(breaks=seq(0, 10, by=1))+
+  geom_histogram(breaks=seq(0, 10, by=1),
+                 col = "grey",
+                 aes(fill=..count..)) +
+  geom_vline(xintercept=mean(timeInHospital), color="red", lwd = 1) +
+  geom_vline(xintercept=median(timeInHospital), color="orange", lwd = 1) + ylim(0, 18000)
+```
+*Need to add mean and median legend*
+
+# Relationship between weight and insulin trends
+
+The plolt below compares the percentages of each insulin trends for all patients vs patients who have not taken their weight during the encounter.
+
+```{r echo=FALSE, fig.width = 10}
+#set up factors (aka all that are categories-- not numerical, continuous data)
+weight <- getSubsetName(data$weight)
+insulin.category <- getSubsetName(data$insulin)
+insulin.value <- getSubsetValue(data, data$insulin, insulin.category)
+
+# #Looking at patients with missing weight data
+missing_weight <- subset(data, data$weight == "?")
+# insulin_down <- subset(missing_weight, missing_weight$insulin == "Down")
+# down_nb <- nrow(insulin_down)
+# insulin_no <- subset(missing_weight, missing_weight$insulin == "No")
+# no_nb <- nrow(insulin_no)
+# insulin_steady <- subset(missing_weight, missing_weight$insulin == "Steady")
+# steady_nb <- nrow(insulin_steady)
+# insulin_up <- subset(missing_weight, missing_weight$insulin == "Up")
+# up_nb <- nrow(insulin_up)
+
+df_insulin <- data.frame(
+  group = insulin.category,
+  value = insulin.value,
+  pct = getPercentage(insulin.value)
+)
+
+
+x_insulin<- df_insulin$value
+labels_insulin <- paste(df_insulin$pct, "%")
+# insulin_chart <- pie(x_insulin, labels_insulin, main = "Insulin for all patients pie chart", col = rainbow(length(x_insulin)))
+# legend("bottom", insulin_chart,insulin.category, fill = rainbow(length(x_insulin)), horiz = TRUE)
+
+
+#missing weight
+insulin.category.noweight <- getSubsetName(missing_weight$insulin)
+insulin.value.noweight <- getSubsetValue(missing_weight, missing_weight$insulin, insulin.category.noweight)
+
+df_insulin_no_weight <- data.frame(
+  group = insulin.category.noweight,
+  value = insulin.value.noweight,
+  pct = getPercentage(insulin.value.noweight)
+)
+
+x_insulin_no_weight<- df_insulin_no_weight$value
+labels_insulin_no_weight<- paste(df_insulin_no_weight$pct, "%")
+# insulin_chart_no_weight <- pie(x_insulin_no_weight, labels_insulin_no_weight, main = "Insulin for patients without weight info pie chart", col = rainbow(length(x_insulin)))
+# legend("bottom", insulin_chart_no_weight,insulin.category.noweight, fill = rainbow(length(x_insulin)), horiz = TRUE)
+
+par(mfrow=c(1,2))
+insulin_chart <- pie(x_insulin, labels_insulin, main = "Insulin for all patients pie chart", col = rainbow(length(x_insulin)))
+insulin_chart_no_weight <- pie(x_insulin_no_weight, labels_insulin_no_weight, main = "Insulin for patients without weight info pie chart", col = rainbow(length(x_insulin)))
+legend("bottom", insulin_chart_no_weight,insulin.category.noweight, fill = rainbow(length(x_insulin)), horiz = TRUE)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
